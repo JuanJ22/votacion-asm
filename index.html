@@ -576,18 +576,21 @@ document.getElementById('btnVoteConfirm').addEventListener('click', async () => 
   confirmBtn.disabled = true;
   confirmBtn.textContent = 'Guardando...';
 
+  LS.markVoted(dayId, groupId);
+
   try {
     await db.ref(`votes/${dayId}/${LS.getVoterId()}`).set({ groupId, ts: Date.now() });
-    LS.markVoted(dayId, groupId);
     closeVoteModal();
     renderProgress();
     const tab = document.querySelector(`.tab-btn[data-day="${dayId}"]`);
     if (tab) tab.classList.add('voted');
   } catch (err) {
-    closeVoteModal();
     if (err.code === 'PERMISSION_DENIED') {
+      closeVoteModal();
       alert('Este dispositivo ya registró un voto para este día.');
     } else {
+      LS.clearVoted(dayId);
+      closeVoteModal();
       alert('Error al guardar el voto. Verifica tu conexión a internet.');
       console.error(err);
     }
