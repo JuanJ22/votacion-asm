@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Votación — Lenguaje de Máquina</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #080c14; --surface: #0d1424; --card: #111827; --border: #1e293b;
+      --text: #e2e8f0; --muted: #64748b;
+      --green: #22c55e; --blue: #3b82f6; --purple: #a855f7;
+      --yellow: #f59e0b; --red: #ef4444;
+    }
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; line-height: 1.5; }
+
+    /* ── SETUP ── */
+    #setupScreen { display: none; min-height: 100vh; align-items: center; justify-content: center; padding: 24px; }
+    #setupScreen.show { display: flex; }
+    .setup-box { background: var(--surface); border: 2px solid var(--yellow); border-radius: 16px; padding: 32px; max-width: 660px; width: 100%; }
+    .setup-icon { font-size: 2.4rem; margin-bottom: 12px; }
+    .setup-box h2 { font-size: 1.35rem; font-weight: 700; color: var(--yellow); margin-bottom: 10px; }
+    .setup-box > p { color: var(--muted); font-size: 0.85rem; margin-bottom: 20px; }
+    .setup-step { display: flex; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+    .setup-step:last-of-type { border: none; }
+    .sn { width: 26px; height: 26px; border-radius: 50%; background: var(--yellow); color: #080c14; font-weight: 800; font-size: 0.82rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px; }
+    .st { font-size: 0.83rem; color: var(--text); line-height: 1.6; }
+    .st code { background: var(--border); padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 0.8rem; color: var(--green); }
+    .setup-link { display: inline-block; margin-top: 18px; padding: 10px 22px; background: var(--yellow); color: #080c14; border-radius: 8px; font-weight: 700; font-size: 0.88rem; text-decoration: none; }
+
+    /* ── HEADER ── */
+    .site-header { background: var(--surface); border-bottom: 2px solid var(--green); padding: 28px 24px 20px; text-align: center; }
+    .binary { font-family: monospace; font-size: 0.76rem; color: var(--green); letter-spacing: 4px; margin-bottom: 8px; opacity: 0.6; }
+    .site-header h1 { font-size: clamp(1.6rem, 5vw, 2.6rem); font-weight: 800; letter-spacing: 2px; text-transform: uppercase; }
+    .accent { color: var(--green); }
+    .subtitle { color: var(--muted); margin-top: 6px; font-size: 0.88rem; }
+
+    /* ── CONNECTION ── */
+    .conn-bar { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 6px 16px; font-size: 0.73rem; font-weight: 600; }
+    .conn-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+    .conn-bar.online  .conn-dot { background: var(--green); }
+    .conn-bar.offline .conn-dot { background: var(--red); }
+    .conn-bar.online  .conn-text { color: var(--green); }
+    .conn-bar.offline .conn-text { color: var(--red); }
+
+    /* ── PROGRESS ── */
+    .progress-wrap { display: flex; align-items: center; justify-content: center; padding: 20px 24px 8px; max-width: 480px; margin: 0 auto; }
+    .prog-step { display: flex; flex-direction: column; align-items: center; gap: 5px; flex: 1; }
+    .prog-dot { width: 36px; height: 36px; border-radius: 50%; border: 2px solid var(--border); background: var(--card); display: flex; align-items: center; justify-content: center; font-size: 0.85rem; font-weight: 700; color: var(--muted); transition: all 0.3s; position: relative; z-index: 1; }
+    .prog-dot.done { border-color: var(--green); background: var(--green); color: #080c14; }
+    .prog-label { font-size: 0.65rem; color: var(--muted); text-align: center; }
+    .prog-line { flex: 1; height: 2px; background: var(--border); margin-bottom: 20px; max-width: 60px; transition: background 0.4s; }
+    .prog-line.done { background: var(--green); }
+
+    /* ── TABS ── */
+    .tabs-nav { display: flex; justify-content: center; gap: 8px; padding: 12px 16px 8px; flex-wrap: wrap; }
+    .tab-btn { background: var(--card); border: 2px solid var(--border); color: var(--muted); padding: 8px 20px; border-radius: 9px; cursor: pointer; font-size: 0.86rem; font-weight: 600; transition: all 0.2s; min-width: 128px; text-align: center; }
+    .tab-btn small { display: block; font-size: 0.68rem; font-weight: 400; margin-top: 2px; opacity: 0.75; }
+    .tab-btn[data-day="day1"].active,.tab-btn[data-day="day1"]:hover { border-color: var(--green);  color: var(--green);  background: rgba(34,197,94,0.08); }
+    .tab-btn[data-day="day2"].active,.tab-btn[data-day="day2"]:hover { border-color: var(--blue);   color: var(--blue);   background: rgba(59,130,246,0.08); }
+    .tab-btn[data-day="day3"].active,.tab-btn[data-day="day3"]:hover { border-color: var(--purple); color: var(--purple); background: rgba(168,85,247,0.08); }
+    .tab-check { display: none; }
+    .tab-btn.voted .tab-check { display: inline; }
+
+    /* ── PANELS ── */
+    .tab-panel { display: none; padding: 24px 16px 48px; max-width: 940px; margin: 0 auto; }
+    .tab-panel.active { display: block; }
+    .day-title { text-align: center; margin-bottom: 24px; }
+    .day-title h2 { font-size: 1.35rem; font-weight: 700; }
+    .day-title p  { color: var(--muted); font-size: 0.8rem; margin-top: 4px; }
+
+    /* ── CARDS ── */
+    .cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(255px, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .group-card { background: var(--card); border: 2px solid var(--border); border-radius: 14px; padding: 20px; transition: transform 0.2s, box-shadow 0.2s; position: relative; overflow: hidden; }
+    .group-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
+    .group-card.my-vote { background: rgba(34,197,94,0.05); }
+    .group-card.winner  { border-color: var(--yellow) !important; }
+    .winner-badge { display: none; position: absolute; top: 0; right: 0; background: var(--yellow); color: #080c14; font-size: 0.6rem; font-weight: 800; padding: 4px 10px; border-bottom-left-radius: 8px; letter-spacing: 1px; text-transform: uppercase; }
+    .winner-badge.show { display: block; }
+    .card-time    { font-size: 0.68rem; color: var(--muted); font-family: monospace; margin-bottom: 6px; }
+    .card-name    { font-size: 1.1rem; font-weight: 700; margin-bottom: 4px; }
+    .card-project { font-size: 0.76rem; color: var(--muted); margin-bottom: 16px; font-style: italic; }
+    .bar-wrap { display: none; margin-bottom: 14px; }
+    .bar-wrap.show { display: block; }
+    .bar-meta { display: flex; justify-content: space-between; font-size: 0.71rem; color: var(--muted); margin-bottom: 5px; }
+    .bar-track { height: 5px; background: var(--border); border-radius: 3px; }
+    .bar-fill  { height: 100%; border-radius: 3px; width: 0%; transition: width 0.7s cubic-bezier(0.4,0,0.2,1); }
+    .vote-btn { width: 100%; padding: 10px 16px; background: transparent; border: 2px solid var(--border); color: var(--muted); border-radius: 8px; cursor: pointer; font-size: 0.86rem; font-weight: 600; transition: all 0.2s; text-transform: uppercase; letter-spacing: 0.5px; }
+    .vote-btn:not(:disabled):hover { transform: translateY(-1px); }
+    .vote-btn.my-pick { background: var(--green); border-color: var(--green); color: #080c14; }
+    .vote-btn:disabled { cursor: not-allowed; opacity: 0.4; }
+    .vote-btn.my-pick:disabled { opacity: 1; }
+    .status-banner { text-align: center; padding: 12px 16px; border-radius: 10px; font-size: 0.86rem; font-weight: 600; border: 1px solid transparent; }
+    .status-banner.done    { background: rgba(34,197,94,0.1);  border-color: var(--green); color: var(--green); }
+    .status-banner.pending { background: rgba(59,130,246,0.06); border-color: rgba(59,130,246,0.3); color: var(--blue); }
+
+    /* ── TEACHER BUTTON ── */
+    .teacher-btn-wrap { text-align: center; padding: 10px; }
+    .teacher-btn { background: transparent; border: 1px solid var(--border); color: var(--muted); padding: 6px 16px; border-radius: 6px; cursor: pointer; font-size: 0.74rem; transition: all 0.2s; }
+    .teacher-btn:hover { border-color: var(--purple); color: var(--purple); }
+
+    /* ── TEACHER OVERLAY ── */
+    .t-overlay { display: none; position: fixed; inset: 0; background: var(--bg); z-index: 400; overflow-y: auto; }
+    .t-overlay.open { display: block; }
+    .t-header { position: sticky; top: 0; background: var(--surface); border-bottom: 2px solid var(--purple); padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; z-index: 10; }
+    .t-header h2 { font-size: 1.15rem; font-weight: 700; color: var(--purple); }
+    .live-badge { display: flex; align-items: center; gap: 6px; font-size: 0.7rem; font-weight: 700; color: var(--green); text-transform: uppercase; letter-spacing: 1px; }
+    .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: blink 1.2s infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
+    .close-btn { background: var(--card); border: 2px solid var(--border); color: var(--muted); width: 36px; height: 36px; border-radius: 8px; cursor: pointer; font-size: 1.1rem; transition: all 0.15s; display: flex; align-items: center; justify-content: center; }
+    .close-btn:hover { border-color: var(--red); color: var(--red); }
+    .t-content { padding: 24px 16px 48px; max-width: 1200px; margin: 0 auto; }
+    .t-days { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+    .t-day-card { background: var(--surface); border-radius: 14px; overflow: hidden; border: 2px solid var(--border); }
+    .t-day-head { padding: 13px 18px; display: flex; justify-content: space-between; align-items: center; }
+    .t-day-head h3 { font-size: 0.95rem; font-weight: 700; }
+    .total-badge { font-size: 0.72rem; font-weight: 700; padding: 3px 10px; border-radius: 12px; background: rgba(255,255,255,0.07); }
+    .t-group { padding: 12px 18px; border-top: 1px solid var(--border); }
+    .tg-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 7px; }
+    .tg-name  { font-size: 0.88rem; font-weight: 600; }
+    .tg-count { font-size: 0.76rem; color: var(--muted); font-family: monospace; }
+    .tg-bar   { height: 6px; background: var(--border); border-radius: 3px; }
+    .tg-fill  { height: 100%; border-radius: 3px; width: 0%; transition: width 0.7s ease; }
+    .t-group.winner .tg-name { color: var(--yellow); }
+
+    /* ── PASSWORD PROMPT ── */
+    .pass-wrap { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 60vh; padding: 32px; text-align: center; }
+    .pass-wrap h3 { font-size: 1.2rem; font-weight: 700; color: var(--purple); margin-bottom: 8px; }
+    .pass-wrap p  { color: var(--muted); font-size: 0.85rem; margin-bottom: 20px; }
+    .pass-input { background: var(--card); border: 2px solid var(--border); color: var(--text); padding: 10px 16px; border-radius: 8px; font-size: 0.95rem; width: 100%; max-width: 260px; margin-bottom: 12px; text-align: center; letter-spacing: 3px; }
+    .pass-input:focus { outline: none; border-color: var(--purple); }
+    .pass-submit { background: var(--purple); border: none; color: #fff; padding: 10px 28px; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 0.9rem; }
+    .pass-error { color: var(--red); font-size: 0.8rem; margin-top: 8px; display: none; }
+    .pass-error.show { display: block; }
+
+    /* Reset button */
+    .reset-wrap { text-align: center; margin-top: 28px; }
+    .reset-btn { background: transparent; border: 2px solid var(--red); color: var(--red); padding: 8px 20px; border-radius: 8px; cursor: pointer; font-size: 0.8rem; font-weight: 600; transition: all 0.2s; }
+    .reset-btn:hover { background: rgba(239,68,68,0.1); }
+
+    /* ── VOTE MODAL ── */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.78); backdrop-filter: blur(6px); z-index: 300; align-items: center; justify-content: center; padding: 16px; }
+    .modal-overlay.open { display: flex; }
+    .modal-box { background: var(--surface); border: 2px solid var(--green); border-radius: 18px; padding: 32px 28px; width: 100%; max-width: 380px; text-align: center; animation: pop 0.2s ease; }
+    @keyframes pop { from{transform:scale(.88);opacity:0} to{transform:scale(1);opacity:1} }
+    .modal-icon { font-size: 2.8rem; margin-bottom: 10px; }
+    .modal-box h3 { font-size: 1.2rem; font-weight: 700; margin-bottom: 10px; }
+    .modal-group { color: var(--green); font-size: 1rem; font-weight: 700; padding: 8px 16px; background: rgba(34,197,94,0.1); border-radius: 8px; margin: 10px 0 14px; }
+    .modal-box p { color: var(--muted); font-size: 0.82rem; margin-bottom: 22px; }
+    .modal-actions { display: flex; gap: 12px; }
+    .btn-cancel,.btn-confirm { flex: 1; padding: 10px; border-radius: 8px; font-size: 0.88rem; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+    .btn-cancel  { background: transparent; border: 2px solid var(--border); color: var(--muted); }
+    .btn-cancel:hover  { border-color: var(--muted); color: var(--text); }
+    .btn-confirm { background: var(--green); border: 2px solid var(--green); color: #080c14; }
+    .btn-confirm:hover { filter: brightness(1.1); }
+    .btn-confirm:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    /* ── FOOTER ── */
+    footer { text-align: center; padding: 16px; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.72rem; }
+    footer p + p { margin-top: 3px; }
+
+    @media (max-width: 480px) {
+      .cards-grid { grid-template-columns: 1fr; }
+      .tab-btn    { min-width: unset; flex: 1; padding: 8px 8px; font-size: 0.8rem; }
+      .t-days     { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══ SETUP SCREEN ══ -->
+<div id="setupScreen">
+  <div class="setup-box">
+    <div class="setup-icon">⚙️</div>
+    <h2>Configura Firebase para activar la votación en vivo</h2>
+    <p>Sigue estos pasos — toma menos de 10 minutos y es completamente gratis.</p>
+
+    <div class="setup-step">
+      <div class="sn">1</div>
+      <div class="st">Ve a <strong>console.firebase.google.com</strong> e inicia sesión con tu cuenta de Google. Crea un nuevo proyecto (cualquier nombre).</div>
+    </div>
+    <div class="setup-step">
+      <div class="sn">2</div>
+      <div class="st">Dentro del proyecto: <strong>Build → Realtime Database → Create database</strong>. Elige la región más cercana y selecciona <em>Start in test mode</em>.</div>
+    </div>
+    <div class="setup-step">
+      <div class="sn">3</div>
+      <div class="st">En la pestaña <strong>Rules</strong> de Realtime Database, reemplaza el contenido con esto y haz clic en <em>Publish</em>:<br>
+        <code>{ "rules": { ".read": true, "votes": { "$d": { "$vid": { ".write": "!data.exists()" } } } } }</code>
+      </div>
+    </div>
+    <div class="setup-step">
+      <div class="sn">4</div>
+      <div class="st">Ve a <strong>⚙️ Configuración del proyecto → General → Tus apps</strong>, agrega una app web (<code>&lt;/&gt;</code>), copia el objeto <code>firebaseConfig</code>.</div>
+    </div>
+    <div class="setup-step">
+      <div class="sn">5</div>
+      <div class="st">Abre este archivo HTML en un editor de texto, busca la sección <code>FIREBASE_CONFIG</code> y pega tus valores.</div>
+    </div>
+
+    <a href="https://console.firebase.google.com" target="_blank" class="setup-link">Abrir Firebase Console →</a>
+  </div>
+</div>
+
+<!-- ══ MAIN APP ══ -->
+<div id="app" style="display:none">
+  <header class="site-header">
+    <div class="binary">1010 &nbsp; 0110 &nbsp; 1101</div>
+    <h1>Lenguaje de <span class="accent">Máquina</span></h1>
+    <p class="subtitle">Sistema de Votación · Defensas de Proyecto</p>
+  </header>
+
+  <div class="conn-bar" id="connBar">
+    <div class="conn-dot"></div>
+    <span class="conn-text">Conectando...</span>
+  </div>
+
+  <div class="progress-wrap" id="progressWrap"></div>
+  <nav class="tabs-nav"      id="tabsNav"></nav>
+  <main                      id="mainContent"></main>
+
+  <div class="teacher-btn-wrap">
+    <button class="teacher-btn" id="btnOpenTeacher">🔒 Vista Docente</button>
+  </div>
+
+  <footer>
+    <p>Lenguaje de Máquina · Defensas de Proyecto 2025</p>
+    <p>Votación en tiempo real · Un voto por día por dispositivo</p>
+  </footer>
+</div>
+
+<!-- ══ TEACHER OVERLAY ══ -->
+<div class="t-overlay" id="teacherOverlay">
+
+  <div class="pass-wrap" id="passPrompt">
+    <h3>🔒 Vista Docente</h3>
+    <p>Ingresa la contraseña para ver los resultados en tiempo real</p>
+    <input type="password" class="pass-input" id="passInput" placeholder="••••••••" autocomplete="off">
+    <button class="pass-submit" id="passSubmit">Ingresar</button>
+    <p class="pass-error" id="passError">Contraseña incorrecta</p>
+  </div>
+
+  <div id="teacherDash" style="display:none">
+    <div class="t-header">
+      <h2>📊 Resultados en Tiempo Real</h2>
+      <div style="display:flex;gap:12px;align-items:center">
+        <div class="live-badge"><div class="live-dot"></div>En vivo</div>
+        <button class="close-btn" id="btnCloseTeacher">✕</button>
+      </div>
+    </div>
+    <div class="t-content">
+      <div class="t-days" id="teacherDays"></div>
+      <div class="reset-wrap">
+        <button class="reset-btn" id="btnReset">🗑️ Reiniciar todos los votos</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══ VOTE MODAL ══ -->
+<div class="modal-overlay" id="voteModal">
+  <div class="modal-box">
+    <div class="modal-icon">🗳️</div>
+    <h3>Confirmar Voto</h3>
+    <div class="modal-group" id="modalGroupName"></div>
+    <p>Esta acción <strong>no se puede deshacer</strong>.<br>Solo puedes votar una vez por cada día.</p>
+    <div class="modal-actions">
+      <button class="btn-cancel"  id="btnVoteCancel">Cancelar</button>
+      <button class="btn-confirm" id="btnVoteConfirm">¡Confirmar!</button>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  PASO 1 — Pega aquí tu configuración de Firebase
+// ═══════════════════════════════════════════════════════════════
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCoy0SGkVr24U2GqPKAojAZSosOv7or7ww",
+
+  authDomain: "apppremio-1574b.firebaseapp.com",
+
+  projectId: "apppremio-1574b",
+
+  storageBucket: "apppremio-1574b.firebasestorage.app",
+
+  messagingSenderId: "339017433192",
+
+  appId: "1:339017433192:web:2f0055f6a33f8aa625bbdd",
+
+  measurementId: "G-SQH3REC4EE"
+
+};
+
+// ═══════════════════════════════════════════════════════════════
+//  PASO 2 — Contraseña de la vista docente
+// ═══════════════════════════════════════════════════════════════
+const TEACHER_PASS = 'docente2025';
+
+// ═══════════════════════════════════════════════════════════════
+//  PASO 3 — Edita el campo "project" con el nombre real de cada proyecto
+// ═══════════════════════════════════════════════════════════════
+const DAYS = [
+  {
+    id: 'day1', label: 'Día 1', date: 'Martes 26 de Mayo', color: '#22c55e',
+    groups: [
+      { id: 'd1g1', name: 'Los Temerarios',        project: 'No presento*', time: '17:00 – 17:20' },
+      { id: 'd1g2', name: 'Los de la o',            project: 'Laberinto (Perdido en SIVAR)', time: '17:20 – 17:40' },
+      { id: 'd1g3', name: 'Bit Lords',              project: 'Terminal Defense', time: '17:40 – 18:00' },
+      { id: 'd1g4', name: 'Funciona en mi Máquina', project: 'Snake Game', time: '18:00 – 18:20' },
+    ]
+  },
+  {
+    id: 'day2', label: 'Día 2', date: 'Jueves 28 de Mayo', color: '#3b82f6',
+    groups: [
+      { id: 'd2g1', name: 'Raidsoft', project: 'Defensa Galáctica', time: '17:00 – 17:20' },
+      { id: 'd2g2', name: 'AMS Core', project: 'Secure Trivia Race', time: '17:20 – 17:40' },
+      { id: 'd2g3', name: 'Grupo 02', project: 'Ahorcado', time: '17:40 – 18:00' },
+      { id: 'd2g4', name: 'KALI+1',   project: 'No presento*', time: '18:00 – 18:20' },
+    ]
+  },
+  {
+    id: 'day3', label: 'Día 3', date: 'Martes 02 de Junio', color: '#a855f7',
+    groups: [
+      { id: 'd3g1', name: 'Grupo 01',      project: 'Adivina el Número Secreto', time: '17:00 – 17:20' },
+      { id: 'd3g2', name: 'Grupo 03',      project: 'Laberinto Game', time: '17:20 – 17:40' },
+      { id: 'd3g3', name: '404 not found', project: 'SECURE ROAD', time: '17:40 – 18:00' },
+      { id: 'd3g4', name: '.ASSEMBLY',     project: 'Breakout', time: '18:00 – 18:20' },
+    ]
+  }
+];
+
+// ═══════════════════════════════════════════════════════════════
+//  FIREBASE INIT
+// ═══════════════════════════════════════════════════════════════
+const IS_CONFIGURED = !Object.values(FIREBASE_CONFIG).some(v => v.startsWith('PEGA_'));
+let db = null;
+
+if (!IS_CONFIGURED) {
+  document.getElementById('setupScreen').classList.add('show');
+} else {
+  firebase.initializeApp(FIREBASE_CONFIG);
+  db = firebase.database();
+  document.getElementById('app').style.display = 'block';
+  initApp();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  LOCAL STORAGE
+// ═══════════════════════════════════════════════════════════════
+const LS = {
+  getVoterId() {
+    let id = localStorage.getItem('lm_voter_id');
+    if (!id) {
+      id = 'v' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+      localStorage.setItem('lm_voter_id', id);
+    }
+    return id;
+  },
+  votedGroup: d => localStorage.getItem(`lm_voted_${d}`),
+  hasVoted:   d => !!localStorage.getItem(`lm_voted_${d}`),
+  markVoted(dayId, groupId) { localStorage.setItem(`lm_voted_${dayId}`, groupId); },
+  clearVoted(dayId)         { localStorage.removeItem(`lm_voted_${dayId}`); }
+};
+
+// ═══════════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════════
+let pending = null;
+const teacherListeners = {};
+
+// ═══════════════════════════════════════════════════════════════
+//  CONNECTION STATUS
+// ═══════════════════════════════════════════════════════════════
+function watchConnection() {
+  db.ref('.info/connected').on('value', snap => {
+    const bar  = document.getElementById('connBar');
+    const text = bar.querySelector('.conn-text');
+    if (snap.val()) {
+      bar.className = 'conn-bar online';
+      text.textContent = 'Conectado — votos en tiempo real';
+    } else {
+      bar.className = 'conn-bar offline';
+      text.textContent = 'Sin conexión — verifica tu red';
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SYNC: si el docente reinició votos, limpiar localStorage
+// ═══════════════════════════════════════════════════════════════
+async function syncVoteState() {
+  const voterId = LS.getVoterId();
+  for (const day of DAYS) {
+    if (LS.hasVoted(day.id)) {
+      const snap = await db.ref(`votes/${day.id}/${voterId}`).once('value');
+      if (!snap.exists()) LS.clearVoted(day.id);
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  PROGRESS
+// ═══════════════════════════════════════════════════════════════
+function renderProgress() {
+  const el = document.getElementById('progressWrap');
+  let html = '';
+  DAYS.forEach((day, i) => {
+    if (i > 0) html += `<div class="prog-line ${LS.hasVoted(DAYS[i-1].id) ? 'done' : ''}"></div>`;
+    html += `<div class="prog-step">
+      <div class="prog-dot ${LS.hasVoted(day.id) ? 'done' : ''}">${LS.hasVoted(day.id) ? '✓' : i + 1}</div>
+      <div class="prog-label">${day.label}</div>
+    </div>`;
+  });
+  el.innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  TABS
+// ═══════════════════════════════════════════════════════════════
+function renderTabs(activeId) {
+  const el = document.getElementById('tabsNav');
+  el.innerHTML = DAYS.map(d => `
+    <button class="tab-btn ${LS.hasVoted(d.id) ? 'voted' : ''} ${d.id === activeId ? 'active' : ''}"
+            data-day="${d.id}">
+      ${d.label}<small>${d.date}</small>
+      <span class="tab-check"> ✓</span>
+    </button>`).join('');
+  el.querySelectorAll('.tab-btn').forEach(btn =>
+    btn.addEventListener('click', () => switchTab(btn.dataset.day))
+  );
+}
+
+function switchTab(dayId) {
+  document.querySelectorAll('.tab-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.day === dayId)
+  );
+  document.querySelectorAll('.tab-panel').forEach(p =>
+    p.classList.toggle('active', p.id === `panel-${dayId}`)
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  PANELS
+// ═══════════════════════════════════════════════════════════════
+function renderPanels(activeId) {
+  document.getElementById('mainContent').innerHTML = DAYS.map(d => `
+    <section class="tab-panel ${d.id === activeId ? 'active' : ''}" id="panel-${d.id}">
+      <div class="day-title">
+        <h2 style="color:${d.color}">${d.label} — ${d.date}</h2>
+        <p>Vota por el grupo que más te impresionó · Un solo voto por día</p>
+      </div>
+      <div class="cards-grid" id="grid-${d.id}"></div>
+      <div class="status-banner pending" id="status-${d.id}">
+        Selecciona el grupo ganador del día y confirma tu voto
+      </div>
+    </section>`).join('');
+
+  DAYS.forEach(d => {
+    db.ref(`votes/${d.id}`).on('value', snap => {
+      const counts = computeCounts(snap.val() || {});
+      renderCards(d, counts);
+    });
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  CARDS
+// ═══════════════════════════════════════════════════════════════
+function computeCounts(votesObj) {
+  const counts = {};
+  Object.values(votesObj).forEach(v => {
+    const gid = typeof v === 'string' ? v : (v && v.groupId);
+    if (gid) counts[gid] = (counts[gid] || 0) + 1;
+  });
+  return counts;
+}
+
+function renderCards(day, counts) {
+  const grid   = document.getElementById(`grid-${day.id}`);
+  const banner = document.getElementById(`status-${day.id}`);
+  if (!grid) return;
+
+  const voted  = LS.hasVoted(day.id);
+  const myVote = LS.votedGroup(day.id);
+  const total  = Object.values(counts).reduce((a, b) => a + b, 0);
+  const maxCnt = Math.max(0, ...Object.values(counts));
+
+  grid.innerHTML = day.groups.map(g => {
+    const isMyVote = g.id === myVote;
+    const count    = counts[g.id] || 0;
+    const pct      = total > 0 ? Math.round(count / total * 100) : 0;
+    const isWinner = voted && count === maxCnt && maxCnt > 0;
+
+    return `
+      <div class="group-card ${isMyVote ? 'my-vote' : ''} ${isWinner ? 'winner' : ''}"
+           style="${isMyVote ? `border-color:${day.color}` : ''}">
+        <div class="winner-badge ${isWinner ? 'show' : ''}">🏆 Ganador</div>
+        <div class="card-time">${g.time}</div>
+        <div class="card-name" style="color:${day.color}">${g.name}</div>
+        <div class="card-project">📁 ${g.project}</div>
+        <div class="bar-wrap ${voted ? 'show' : ''}">
+          <div class="bar-meta"><span>Votos</span><span>${count} · ${pct}%</span></div>
+          <div class="bar-track">
+            <div class="bar-fill" id="fill-${g.id}" style="background:${day.color}"></div>
+          </div>
+        </div>
+        <button class="vote-btn ${isMyVote ? 'my-pick' : ''}"
+                ${voted ? 'disabled' : ''}
+                data-day="${day.id}" data-group="${g.id}" data-name="${g.name}">
+          ${isMyVote ? '✓ Mi voto' : 'Votar'}
+        </button>
+      </div>`;
+  }).join('');
+
+  if (voted) {
+    requestAnimationFrame(() => {
+      day.groups.forEach(g => {
+        const fill = document.getElementById(`fill-${g.id}`);
+        const pct  = total > 0 ? Math.round((counts[g.id] || 0) / total * 100) : 0;
+        if (fill) fill.style.width = pct + '%';
+      });
+    });
+  }
+
+  if (!voted) {
+    grid.querySelectorAll('.vote-btn').forEach(btn => {
+      btn.addEventListener('mouseenter', () => { btn.style.borderColor = day.color; btn.style.color = day.color; });
+      btn.addEventListener('mouseleave', () => { btn.style.borderColor = ''; btn.style.color = ''; });
+    });
+  }
+
+  if (banner) {
+    banner.className = `status-banner ${voted ? 'done' : 'pending'}`;
+    banner.textContent = voted
+      ? '✓ Ya emitiste tu voto para este día. ¡Gracias por participar!'
+      : 'Selecciona el grupo ganador del día y confirma tu voto';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  VOTE SUBMISSION
+// ═══════════════════════════════════════════════════════════════
+document.getElementById('mainContent').addEventListener('click', e => {
+  const btn = e.target.closest('.vote-btn');
+  if (!btn || btn.disabled) return;
+  const { day, group, name } = btn.dataset;
+  if (!LS.hasVoted(day)) openVoteModal(day, group, name);
+});
+
+function openVoteModal(dayId, groupId, groupName) {
+  pending = { dayId, groupId };
+  document.getElementById('modalGroupName').textContent = groupName;
+  document.getElementById('voteModal').classList.add('open');
+}
+
+function closeVoteModal() {
+  pending = null;
+  document.getElementById('voteModal').classList.remove('open');
+}
+
+document.getElementById('btnVoteCancel').addEventListener('click', closeVoteModal);
+document.getElementById('voteModal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeVoteModal();
+});
+
+document.getElementById('btnVoteConfirm').addEventListener('click', async () => {
+  if (!pending) return;
+  const { dayId, groupId } = pending;
+  const confirmBtn = document.getElementById('btnVoteConfirm');
+  confirmBtn.disabled = true;
+  confirmBtn.textContent = 'Guardando...';
+
+  try {
+    await db.ref(`votes/${dayId}/${LS.getVoterId()}`).set({ groupId, ts: Date.now() });
+    LS.markVoted(dayId, groupId);
+    closeVoteModal();
+    renderProgress();
+    const tab = document.querySelector(`.tab-btn[data-day="${dayId}"]`);
+    if (tab) tab.classList.add('voted');
+  } catch (err) {
+    closeVoteModal();
+    if (err.code === 'PERMISSION_DENIED') {
+      alert('Este dispositivo ya registró un voto para este día.');
+    } else {
+      alert('Error al guardar el voto. Verifica tu conexión a internet.');
+      console.error(err);
+    }
+  } finally {
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = '¡Confirmar!';
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  TEACHER VIEW
+// ═══════════════════════════════════════════════════════════════
+document.getElementById('btnOpenTeacher').addEventListener('click', () => {
+  document.getElementById('teacherOverlay').classList.add('open');
+  document.getElementById('passPrompt').style.display  = 'flex';
+  document.getElementById('teacherDash').style.display = 'none';
+  document.getElementById('passInput').value = '';
+  document.getElementById('passError').classList.remove('show');
+  setTimeout(() => document.getElementById('passInput').focus(), 100);
+});
+
+document.getElementById('btnCloseTeacher').addEventListener('click', () => {
+  document.getElementById('teacherOverlay').classList.remove('open');
+  DAYS.forEach(d => {
+    if (teacherListeners[d.id]) {
+      db.ref(`votes/${d.id}`).off('value', teacherListeners[d.id]);
+      delete teacherListeners[d.id];
+    }
+  });
+});
+
+function tryTeacherLogin() {
+  if (document.getElementById('passInput').value === TEACHER_PASS) {
+    document.getElementById('passPrompt').style.display  = 'none';
+    document.getElementById('teacherDash').style.display = 'block';
+    buildTeacherDash();
+  } else {
+    document.getElementById('passError').classList.add('show');
+    document.getElementById('passInput').value = '';
+    document.getElementById('passInput').focus();
+  }
+}
+
+document.getElementById('passSubmit').addEventListener('click', tryTeacherLogin);
+document.getElementById('passInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') tryTeacherLogin();
+});
+
+function buildTeacherDash() {
+  document.getElementById('teacherDays').innerHTML = DAYS.map(d => `
+    <div class="t-day-card" style="border-color:${d.color}40">
+      <div class="t-day-head" style="background:${d.color}12; border-bottom:2px solid ${d.color}30">
+        <h3 style="color:${d.color}">${d.label} — ${d.date}</h3>
+        <span class="total-badge" id="total-${d.id}" style="color:${d.color}">0 votos</span>
+      </div>
+      ${d.groups.map(g => `
+        <div class="t-group" id="tg-${g.id}">
+          <div class="tg-head">
+            <span class="tg-name">${g.name}</span>
+            <span class="tg-count" id="tgc-${g.id}">0 votos · 0%</span>
+          </div>
+          <div class="tg-bar">
+            <div class="tg-fill" id="tgf-${g.id}" style="background:${d.color}"></div>
+          </div>
+        </div>`).join('')}
+    </div>`).join('');
+
+  DAYS.forEach(d => {
+    const handler = snap => updateTeacherDay(d, snap.val() || {});
+    teacherListeners[d.id] = handler;
+    db.ref(`votes/${d.id}`).on('value', handler);
+  });
+}
+
+function updateTeacherDay(day, votesObj) {
+  const counts = computeCounts(votesObj);
+  const total  = Object.values(counts).reduce((a, b) => a + b, 0);
+  const maxCnt = Math.max(0, ...Object.values(counts));
+
+  const totalEl = document.getElementById(`total-${day.id}`);
+  if (totalEl) totalEl.textContent = `${total} voto${total !== 1 ? 's' : ''}`;
+
+  day.groups.forEach(g => {
+    const count = counts[g.id] || 0;
+    const pct   = total > 0 ? Math.round(count / total * 100) : 0;
+    const isWin = count === maxCnt && maxCnt > 0;
+
+    const tg  = document.getElementById(`tg-${g.id}`);
+    const tgc = document.getElementById(`tgc-${g.id}`);
+    const tgf = document.getElementById(`tgf-${g.id}`);
+
+    if (tg)  tg.className  = `t-group ${isWin ? 'winner' : ''}`;
+    if (tgc) tgc.textContent = `${count} voto${count !== 1 ? 's' : ''} · ${pct}%${isWin ? ' 🏆' : ''}`;
+    if (tgf) requestAnimationFrame(() => tgf.style.width = pct + '%');
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  RESET
+// ═══════════════════════════════════════════════════════════════
+document.getElementById('btnReset').addEventListener('click', async () => {
+  const pass = prompt('Contraseña para confirmar el reinicio:');
+  if (pass !== TEACHER_PASS) { alert('Contraseña incorrecta.'); return; }
+  if (!confirm('¿Eliminar TODOS los votos de los 3 días? Los estudiantes podrán volver a votar.')) return;
+
+  await db.ref('votes').remove();
+  DAYS.forEach(d => LS.clearVoted(d.id));
+  renderProgress();
+
+  const tabsNav = document.getElementById('tabsNav');
+  tabsNav.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('voted'));
+  alert('Votos eliminados correctamente.');
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════════
+async function initApp() {
+  watchConnection();
+  await syncVoteState();
+  renderProgress();
+  renderTabs('day1');
+  renderPanels('day1');
+}
+</script>
+</body>
+</html>
