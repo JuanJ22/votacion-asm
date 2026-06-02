@@ -707,7 +707,7 @@ document.getElementById('btnReset').addEventListener('click', async () => {
 // ═══════════════════════════════════════════════════════════════
 async function initApp() {
   watchConnection();
-  await syncVoteState();
+  try { await syncVoteState(); } catch(e) { console.warn('syncVoteState:', e); }
   renderProgress();
   renderTabs('day1');
   renderPanels('day1');
